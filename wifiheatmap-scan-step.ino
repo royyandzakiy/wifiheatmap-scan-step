@@ -26,9 +26,20 @@ int step_count_max;               // maximum step movement allowed to get a 360 
 int step_count = 0;               // number of steps the motor has taken
 
 // initialize the stepper library on pins 8 through 11:
-Stepper my_stepper(STEPS_PER_REVOLUTION, 8, 9, 10, 11);
+#define PIN_IN1 25
+#define PIN_IN2 33
+#define PIN_IN3 32
+#define PIN_IN4 35
+Stepper my_stepper(STEPS_PER_REVOLUTION, PIN_IN1, PIN_IN2, PIN_IN3, PIN_IN4);
 
 void setup_stepper() {
+  pinMode(PIN_IN1, OUTPUT);
+  pinMode(PIN_IN2, OUTPUT);
+  pinMode(PIN_IN3, OUTPUT);
+  pinMode(PIN_IN4, OUTPUT);
+
+  my_stepper.setSpeed(20);
+  
   step_count_max = STEPS_MAX / STEPS_PER_REVOLUTION;
 }
 
