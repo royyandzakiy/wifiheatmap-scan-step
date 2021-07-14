@@ -1,5 +1,3 @@
-#include <Arduino.h>
-
 /**
  * WiFi Heatmap Scan n Step
  * 
@@ -10,10 +8,11 @@
  * 
  * The movement will be a zigzag: top to bottom, step to side, bottom to up, step to side, ...
  * 
- * The total heatmap will be saved within the heatmap_pixel_map[] float array
+ * The total heatmap will be saved within the heatmapPixelMap[] float array
  * 
  */
 
+#include <Arduino.h>
 #include <WiFi.h>
 #include <Stepper.h>
 
@@ -21,49 +20,50 @@
 // STEPPER
 // Controls stepper, giving horizontal rotations
 
-#define STEPS_A_REVOLUTION 200  // change this to fit the number of steps per revolution for your motor
+// change this to fit the number of steps per revolution for your motor
+#define MAX_VERT_STEP 200
+#define MAX_HORZ_STEP 200 
 
-// Stepper Control Related Pin Mapping
-#define STEP_X_PIN  26
-#define DIR_X_PIN   16 
-#define STEP_Z_PIN  17
-#define DIR_Z_PIN   14
-#define LIM_X_PIN   13
-#define LIM_Z_PIN   23
+// Stepper Control Related Pins
+#define STEP_VERT_PIN  26
+#define DIR_VERT_PIN   16 
+#define STEP_HORZ_PIN  17
+#define DIR_HORZ_PIN   14
+#define LIM_VERT_PIN   13
+#define LIM_HORZ_PIN   23
 
 #define STEP_DELAY_MS 500
 
-int vrtStep = 5;
-int hrzStep = 20;
+const int numOfPixelX = 5;
+const int numOfPixelY = 20;
+const int heatmapResolution = numOfPixelX * numOfPixelY;
 
-int vrtStepPos = 0;
-int hrzStepPos = 0;
+const int xStep = 5;
+const int yStep = 5;
 
-int pixelCount = 0;
+int xPos = 0;
+int yPos = 0;
 
-int verticalStepDirection;
+int xDirection;
 
-Stepper vertStepper(STEPS_A_REVOLUTION, STEP_X_PIN, DIR_X_PIN);
-Stepper horzStepper(STEPS_A_REVOLUTION, STEP_Z_PIN, DIR_Z_PIN);
+Stepper vertStepper(MAX_VERT_STEP, STEP_VERT_PIN, DIR_VERT_PIN);
+Stepper horzStepper(MAX_HORZ_STEP, STEP_HORZ_PIN, DIR_HORZ_PIN);
 
 //=======================================
 // WIFI HEATMAP
-// Controls wifi mean rssi capture, then saving to heatmap_pixel_map
+// Controls wifi mean rssi capture, then saving to heatmapPixelMap
 
 // #define SCAN_RESULT_PRINT
-const int heatmap_pixel_pos_max = 1000;
-float heatmap_pixel_map[heatmap_pixel_pos_max];
-int heatmap_pixel_pos = 0;
+
+float heatmapPixelMap[heatmapResolution];
+int heatmapPixelPos = 0;
 
 bool addHeatmapPixelMap(float _heatmap_pixel) {
-  if (heatmap_pixel_pos < heatmap_pixel_pos_max) {
-    heatmap_pixel_map[heatmap_pixel_pos] = _heatmap_pixel;
-    heatmap_pixel_pos++;
-    return true;
-  } else {
-    // fail to add because map already maxed
-    return false;
-  }
+  if (heatmapPixelPos > heatmapResolution) return false;
+
+  heatmapPixelMap[heatmapPixelPos] = _heatmap_pixel;
+  heatmapPixelPos++;
+  return true;
 }
 
 void setupWiFi() {
@@ -103,7 +103,27 @@ float avgWiFiRssi() {
   return (n != 0) ? sumRssi / n : 0;
 }
 
+void moveStepper() {
+  horzStepper.step(xStep*xDirection);
+  delay(STEP_DELAY_MS);
+  xPos += xDirection;
 
+  bool isHorzEdgeLeft = xPos >= numOfPixelX;
+  bool isHorzEdgeRight = xPos <= 0;
+  bool isHitEdge = isHorzEdgeLeft || isHorzEdgeRight;
+
+  if (isHitEdge) {
+    vertStepper.step(yStep);
+    delay(STEP_DELAY_MS);
+    yPos++;
+
+    if (isHorzEdgeLeft) {
+      xDirection = -1;
+    } else {
+      xDirection = 1;
+    }
+  }
+}
 
 //=====================================
 // MAIN
@@ -114,55 +134,27 @@ void setup() {
 
   setupWiFi();
   avgWiFiRssi();
-  vertStepper.setSpeed(60);
-  horzStepper.setSpeed(60);
+  vertStepper.setSpeed(10);
+  horzStepper.setSpeed(20);
   
   Serial.println("setup: done");
 }
 
 void loop() {
-  while (pixelCount <= heatmap_pixel_pos_max) {
-    // get heatmap_pixel
-    int heatmap_pixel = avgWiFiRssi();
-    bool success_add = addHeatmapPixelMap(heatmap_pixel);
-    if (!success_add) {
-      Serial.println("heatmap_pixel_pos_max reached");
-      break;
-    }
-    
-    // continue vert_stepper zigzag movement, if reach edge return true
-    vertStepper.step(vrtStep);
-    delay(STEP_DELAY_MS);
-    vrtStepPos += verticalStepDirection;
+  int heatmapRead;
 
-    // check if reached bottom or top, then change neg/pos accordingly
-    bool isVrtEdgeBottom = vrtStepPos >= 20;
-    bool isVrtEdgeTop = vrtStepPos <= 0;
-    bool reachVerticalEdge = isVrtEdgeBottom || isVrtEdgeTop; // edge is position 90 degree or 0 degree
+  do {
+    // heatmapRead = avgWiFiRssi(); 
+    heatmapRead = 0; // mechanical test
+    moveStepper();
 
-    if (reachVerticalEdge) {
-      vrtStep = -1 * vrtStep;
-      horzStepper.step(hrzStep);
-      delay(STEP_DELAY_MS);
-      hrzStepPos++;
-
-      if (isVrtEdgeBottom) {
-        verticalStepDirection = -1;
-      }
-      if (isVrtEdgeTop) {
-        verticalStepDirection = 1;
-      }
-    }
-
-    Serial.print(hrzStepPos);
+    Serial.print(xPos);
     Serial.print(",");
-    Serial.print(vrtStepPos);
+    Serial.print(yPos);
     Serial.print(",");
-    Serial.print(heatmap_pixel);
+    Serial.print(heatmapRead);
     Serial.print("\n");
-
-    pixelCount++;
-  }
+  } while (addHeatmapPixelMap(heatmapRead));
 
   Serial.println("Heatmap process done.");
   while(1);
