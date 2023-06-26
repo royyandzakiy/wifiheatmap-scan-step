@@ -16,3 +16,7 @@ The total heatmap will be saved within the heatmap_pixel_map[] float array
 - choose correct board. Tools > Board > "DOIT ESP32 DEVKIT V1"
 - choose correct port. Tools > Port > [choose correct port]
 - upload
+
+---
+
+The inspiration to making this project is loosely based upon this video [The Thought Emporium - Building a Camera That Can See Wifi](https://www.youtube.com/watch?v=g3LT_b6K0Mc&ab_channel=TheThoughtEmporium)
